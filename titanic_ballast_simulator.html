@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>타이타닉 700:1 유리구슬 배치 시뮬레이터</title>
+<style>
+:root{--bg:#eef2f5;--card:#fff;--ink:#17212b;--muted:#5e6a75;--line:#c9d1d8;--accent:#1976d2;--ball:#2f7cf6}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,"Malgun Gothic",sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:1180px;margin:0 auto;padding:22px}h1{margin:0 0 6px;font-size:26px}.sub{color:var(--muted);margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 1px 3px #0000000a}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}label{display:block;font-weight:700;margin-bottom:6px}
+input[type=number]{width:140px;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:15px}
+.small{font-size:12px;color:var(--muted);font-weight:400}.zones{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.zone{border:2px solid var(--line);border-radius:10px;padding:10px 6px;text-align:center;background:#f8fafb;cursor:pointer;user-select:none}
+.zone.active{border-color:var(--accent);background:#e8f2ff}.zone .letter{font-size:20px;font-weight:800}.zone .side{font-size:11px;color:var(--muted)}
+.ball{width:30px;height:30px;margin:6px auto;border-radius:50%;background:var(--ball);box-shadow:inset -5px -6px 10px #0002,inset 4px 4px 8px #fff7}
+button{border:0;border-radius:9px;padding:10px 14px;font-size:14px;font-weight:700;cursor:pointer}.primary{background:var(--accent);color:#fff}.ghost{background:#e9edf1;color:#25313c}
+.result{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fafbfc}
+.metric .v{font-size:23px;font-weight:800}.metric .k{font-size:12px;color:var(--muted);margin-top:3px}
+.notice{padding:10px 12px;border-radius:8px;background:#fff7e8;color:#74540a;font-size:13px;line-height:1.55}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{border-bottom:1px solid #e0e5e9;padding:7px;text-align:center}th{background:#f0f3f6;position:sticky;top:0}
+.scroll{max-height:430px;overflow:auto;border:1px solid var(--line);border-radius:10px}.footer{font-size:12px;color:var(--muted);line-height:1.6}
+@media(max-width:760px){.result{grid-template-columns:1fr 1fr}.zones{grid-template-columns:repeat(3,1fr)}.wrap{padding:12px}}
+</style>
+</head>
+<body><div class="wrap">
+<h1>타이타닉 700:1 유리구슬 배치 시뮬레이터</h1>
+<div class="sub">A=선수 · F=선미 / 한 구역당 유리구슬 최대 1개 / 1~6개 전체 63가지 배치</div>
+
+<div class="card">
+<h2>① 기본 조건</h2>
+<div class="row">
+<div><label for="dry">모형 건조중량 (g)</label><input id="dry" type="number" value="110" min="0" step="0.1"></div>
+<div><label for="ballMass">유리구슬 1개 무게 (g)</label><input id="ballMass" type="number" value="1.31" min="0" step="0.01"></div>
+<div><label for="limit">기준 침수 한계 (g)</label><input id="limit" type="number" value="145" min="0.1" step="0.1"></div>
+<div><label for="flow">기본 물 유입률 (g/s)</label><input id="flow" type="number" value="1.5" min="0.1" step="0.1"></div>
+</div>
+<p class="small">초기값은 간이 계산을 위한 가정입니다. 실제 모형을 측정한 값으로 바꾸세요.</p>
+</div>
+
+<div class="card">
+<h2>② 구슬을 놓을 곳 선택</h2>
+<div class="zones" id="zones"></div>
+<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+<button class="primary" id="calculate">선택 배치 계산</button>
+<button class="ghost" id="all">6개 전체 선택</button>
+<button class="ghost" id="clear">선택 해제</button>
+</div>
+</div>
+
+<div class="card">
+<h2>③ 선택한 배치 결과</h2>
+<div id="error"></div>
+<div class="result">
+<div class="metric"><div class="v" id="rCount">-</div><div class="k">사용 구슬 수</div></div>
+<div class="metric"><div class="v" id="rTime">-</div><div class="k">예상 침몰시간</div></div>
+<div class="metric"><div class="v" id="rTilt">-</div><div class="k">예상 종방향 기울기</div></div>
+<div class="metric"><div class="v" id="rMass">-</div><div class="k">모형+구슬 질량</div></div>
+</div>
+<div style="margin-top:12px"><b>선택 배치:</b> <span id="rLayout">-</span></div>
+</div>
+
+<div class="card">
+<h2>④ 1~6개 전체 배치 경우의 수</h2>
+<div class="small" style="margin-bottom:8px">총 63가지 (2⁶ − 1). 표의 모든 시간은 같은 가정과 계산식을 사용합니다.</div>
+<div class="scroll"><table><thead><tr><th>No.</th><th>구슬 수</th><th>배치</th><th>예상 기울기</th><th>예상 침몰시간</th></tr></thead><tbody id="allRows"></tbody></table></div>
+</div>
+
+<div class="card footer">
+<b>중요한 한계</b><br>
+이것은 실제 조선공학 시뮬레이터가 아니라 학습용 비교 모델입니다. 기본 시간은 (기준 침수 한계 − 모형과 구슬의 합산 질량) ÷ 물 유입률로 계산하고, 구슬의 선수/선미 방향 분포에 경험적 보정항을 적용합니다. 기울기 값 역시 실제 선체의 안정성 방정식으로 검증된 값이 아닙니다. 결과를 실제 침몰시간으로 보장할 수 없으며, 실험에서 측정한 값과 비교해 보세요.
+</div>
+</div>
+<script>
+"use strict";
+const ZONES=["A","B","C","D","E","F"];
+const POS={A:-2.5,B:-1.5,C:-0.5,D:0.5,E:1.5,F:2.5};
+let selected=new Set();
+
+function config(){
+  const c={
+    dry:Number(document.getElementById("dry").value),
+    ball:Number(document.getElementById("ballMass").value),
+    limit:Number(document.getElementById("limit").value),
+    flow:Number(document.getElementById("flow").value)
+  };
+  if(!Object.values(c).every(Number.isFinite)||c.dry<0||c.ball<0||c.limit<=0||c.flow<=0)
+    throw new Error("모형/구슬 질량은 0 이상, 기준 침수 한계와 물 유입률은 0보다 커야 합니다.");
+  return c;
+}
+function calc(layout){
+  const c=config(), n=layout.length;
+  if(n<1) throw new Error("A~F 중 한 곳 이상을 선택하세요.");
+  const xs=layout.map(z=>POS[z]), mean=xs.reduce((a,b)=>a+b,0)/n;
+  const spread=Math.sqrt(xs.reduce((s,x)=>s+(x-mean)**2,0)/n);
+  const weight=c.dry+n*c.ball;
+  const base=(c.limit-weight)/c.flow;
+  // 비교용 경험식: 구슬 분포가 선수/선미 한쪽으로 치우칠수록 침수시간을 줄이는 설정
+  const time=Math.max(0,base-1.45*Math.abs(mean)+0.12*(spread/2.5));
+  const tilt=1.6*mean; // 음수=선수 하강, 양수=선미 하강
+  return {n,weight,mean,spread,time,tilt};
+}
+function tiltText(t){
+  if(Math.abs(t)<0.25)return `거의 수평 (${Math.abs(t).toFixed(2)}°)`;
+  return t<0?`선수 하강 (${Math.abs(t).toFixed(2)}°)`:`선미 하강 (${Math.abs(t).toFixed(2)}°)`;
+}
+function renderZones(){
+  const el=document.getElementById("zones");el.innerHTML="";
+  ZONES.forEach(z=>{
+    const d=document.createElement("div");
+    d.className="zone"+(selected.has(z)?" active":"");
+    d.setAttribute("role","checkbox");d.setAttribute("aria-checked",String(selected.has(z)));d.tabIndex=0;
+    function toggle(){if(selected.has(z))selected.delete(z);else selected.add(z);renderZones();}
+    d.onclick=toggle;d.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();toggle();}};
+    const loc=z==="A"?"선수":z==="F"?"선미":"중간 구역";
+    d.innerHTML=`<div class="letter">${z}</div><div class="ball"></div><div class="side">${loc}</div>`;
+    el.appendChild(d);
+  });
+}
+function calculateSelected(){
+  const layout=ZONES.filter(z=>selected.has(z));
+  const error=document.getElementById("error");
+  try{
+    const r=calc(layout);error.innerHTML="";
+    document.getElementById("rCount").textContent=r.n+"개";
+    document.getElementById("rTime").textContent=r.time.toFixed(2)+"초";
+    document.getElementById("rTilt").textContent=tiltText(r.tilt);
+    document.getElementById("rMass").textContent=r.weight.toFixed(2)+" g";
+    document.getElementById("rLayout").textContent=layout.join(" - ");
+  }catch(e){error.innerHTML=`<div class="notice">${e.message}</div>`;}
+}
+function combinations(arr,k){
+  const out=[];
+  function rec(start,cur){if(cur.length===k){out.push(cur.slice());return;}
+    for(let i=start;i<arr.length;i++){cur.push(arr[i]);rec(i+1,cur);cur.pop();}}
+  rec(0,[]);return out;
+}
+function allCases(){
+  const out=[];let no=1;
+  for(let n=1;n<=6;n++)for(const combo of combinations(ZONES,n)){
+    const r=calc(combo);out.push({no: no++,layout:combo,...r});
+  }
+  return out;
+}
+function renderAll(){
+  try{
+    const cases=allCases();
+    document.getElementById("allRows").innerHTML=cases.map(r=>
+      `<tr><td>${r.no}</td><td>${r.n}</td><td>${r.layout.join("-")}</td><td>${tiltText(r.tilt)}</td><td><b>${r.time.toFixed(2)}초</b></td></tr>`
+    ).join("");
+  }catch(e){document.getElementById("allRows").innerHTML=`<tr><td colspan="5">${e.message}</td></tr>`;}
+}
+document.getElementById("calculate").onclick=calculateSelected;
+document.getElementById("all").onclick=()=>{selected=new Set(ZONES);renderZones();calculateSelected();};
+document.getElementById("clear").onclick=()=>{selected.clear();renderZones();["rCount","rTime","rTilt","rMass","rLayout"].forEach(id=>document.getElementById(id).textContent="-");document.getElementById("error").innerHTML="";};
+["dry","ballMass","limit","flow"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{renderAll();if(selected.size)calculateSelected();}));
+renderZones();renderAll();
+</script>
+</body></html>
